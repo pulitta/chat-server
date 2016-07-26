@@ -30,6 +30,8 @@ init(Ref, Socket, Transport, _Opts = []) ->
     ok = proc_lib:init_ack({ok, self()}),
     ok = ranch:accept_ack(Ref),
     ok = Transport:setopts(Socket, [{active, true}, {packet, 4}]),
+    {ok, {Ip, Port}} = inet:peername(Socket),
+    ok = chat_server_broker:connect({Ip, Port}),
     gen_server:enter_loop(?MODULE, [],
         #state{socket=Socket, transport=Transport},
         ?TIMEOUT).
