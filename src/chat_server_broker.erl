@@ -13,25 +13,40 @@
 
 -export([
 	start_link/1,
-	connect/1]).
+	new_client/1,
+	update_client/2]).
 
 -record(state, {
-            clients
+            clients,
+            id = 0
         }).
 
 start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
-connect(IPPort) ->
-	gen_server:call(?MODULE, {connect, IPPort}, 1000).
+new_client(IPPort) ->
+	gen_server:call(?MODULE, {new_client, IPPort}, 1000).
+
+update_client(Id, IPPort) ->
+	gen_server:call(?MODULE, {update_client, Id, IPPort}, 1000).
 
 init(Args) ->
     Clients = ets:new(clients, [protected, set]),
     {ok, #state{clients = Clients}}.
 
-handle_call({connect, IPPort}, From, #state{clients = Clients} = State) ->
+handle_call({new_client, IPPort}, From, #state{clients = Clients, id = Id} = State) ->
+	NewId = Id + 1,
     {ok, Pid} = supervisor:start_child(worker_sub, []),
-    ets:insert(Clients, {IPPort, undefined, Pid}),
+    ets:insert(Clients, {Id, IPPort, undefined, Pid}),
+    {reply, {ok, NewId}, State#state{id = NewId}};
+
+handle_call({update_client, Id, IPPort}, From, #state{clients = Clients} = State) ->
+	case ets:lookup(Clients, Id) of
+		[{_, _, Nickname, Pid}] -> 
+			ets:delete(Clients, Id),
+			ets:insert(Clients, {Id, IPPort, Nickname, Pid});
+		_ -> undefined
+    end,
     {reply, ok, State};
 
 handle_call(Request, _From, State) ->
