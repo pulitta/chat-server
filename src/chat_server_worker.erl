@@ -14,7 +14,7 @@
 -export([start_link/1]).
 
 start_link(Args) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
+    gen_server:start_link(?MODULE, Args, []).
 
 init(Args) ->
     {ok, ok}.
