@@ -39,8 +39,7 @@ handle_info({tcp, Socket, Data}, State = #state{socket = Socket}) ->
     case handle_data(Data, State) of
         {ok, NewState} -> {noreply, NewState, ?TIMEOUT};
         {error, Reason, NewState} -> {stop, {error, Reason}, NewState}
-    end,
-    {noreply, State, ?TIMEOUT}; 
+    end; 
 
 handle_info({tcp_closed, _Socket}, State) ->
     {stop, normal, State};
@@ -77,13 +76,16 @@ handle_data(<<"new">>, #state{socket = Socket} = State) ->
 handle_data(<<"i","d"," ",Id/binary>>, #state{socket = Socket} = State) ->
     IntId = binary_to_integer(Id),
     {ok, {Ip, Port}} = inet:peername(Socket),
-    case chat_server_broker:update_client(IntId, {Ip, Port}) of
-        ok -> {ok, State};
+    case chat_server_broker:update_client(IntId, {ipport, {Ip, Port}}) of
+        ok -> {ok, State#state{client_id = IntId}};
         {error, Reason} -> {error, Reason, State}
     end;
 
 handle_data(<<"s","e","t","n","i","c","k"," ",Nick/binary>>, #state{client_id = ClientId} = State) ->
-    {ok, State};
+    case chat_server_broker:update_client(ClientId, {nickname, Nick}) of
+        ok -> {ok, State};
+        {error, Reason} -> {error, Reason, State}
+    end;
 
 handle_data(Message, State) ->
     {ok, State}.

@@ -13,11 +13,20 @@
 
 -export([start_link/1]).
 
+-record(state, {
+            messages
+        }).
+
 start_link(Args) ->
     gen_server:start_link(?MODULE, Args, []).
 
 init(Args) ->
-    {ok, ok}.
+	Messages = queue:new(),
+    {ok, #state{messages = Messages}}.
+
+handle_call({message, Message}, _From, #state{messages = Messages}) ->
+	NewMessages = queue:in(Message, Messages),
+    {reply, ok, #state{messages = NewMessages}};
 
 handle_call(Request, _From, State) ->
     {stop, {unknown_call, Request}, State}.
