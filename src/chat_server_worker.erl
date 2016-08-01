@@ -20,7 +20,7 @@
 start_link(Args) ->
     gen_server:start_link(?MODULE, Args, []).
 
-init(Args) ->
+init(_Args) ->
 	Messages = queue:new(),
     {ok, #state{messages = Messages}}.
 

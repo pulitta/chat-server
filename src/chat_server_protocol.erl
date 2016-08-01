@@ -87,6 +87,7 @@ handle_data(<<"s","e","t","n","i","c","k"," ",Nick/binary>>, #state{client_id = 
         {error, Reason} -> {error, Reason, State}
     end;
 
-handle_data(Message, State) ->
+handle_data(Message, #state{client_id = ClientId} = State) ->
+    chat_server_broker:message(ClientId, Message),
     {ok, State}.
     

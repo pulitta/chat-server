@@ -32,19 +32,19 @@ update_client(Id, {Param, Value}) ->
 	gen_server:call(?MODULE, {update_client, Id, {Param, Value}}, 1000).
 
 message(Id, Message) ->
-	gen_server:call(?MODULE, {message, Message}, 1000).
+	gen_server:call(?MODULE, {message, Id, Message}, 1000).
 
-init(Args) ->
+init(_Args) ->
     Clients = ets:new(clients, [protected, set]),
     {ok, #state{clients = Clients}}.
 
-handle_call({new_client, IPPort}, From, #state{clients = Clients, id = Id} = State) ->
+handle_call({new_client, IPPort}, _From, #state{clients = Clients, id = Id} = State) ->
 	NewId = Id + 1,
     {ok, Pid} = supervisor:start_child(worker_sub, []),
     ets:insert(Clients, {NewId, IPPort, undefined, Pid}),
     {reply, {ok, NewId}, State#state{id = NewId}};
 
-handle_call({update_client, Id, ParamToUpdate}, From, #state{clients = Clients} = State) ->
+handle_call({update_client, Id, ParamToUpdate}, _From, #state{clients = Clients} = State) ->
 	case ets:lookup(Clients, Id) of
 		[{_, IpPort, Nickname, Pid}] -> 
 			ets:delete(Clients, Id),
@@ -59,8 +59,13 @@ handle_call({update_client, Id, ParamToUpdate}, From, #state{clients = Clients} 
     end,
     {reply, ok, State};
 
-handle_call({message, Message}, From, #state{clients = Clients} = State) ->
-	% send message to worker
+handle_call({message, Id, Message}, _From, #state{clients = Clients} = State) ->
+	Pids =  ets:select(Clients,[{{'$1','_','_','$4'},[{'/=', '$1', Id}],['$4']}]),
+	ok = lists:foreach(
+		fun(Pid) -> 
+			gen_server:call(Pid, {message, Message}, 1000)
+		end,
+	Pids),
     {reply, ok, State};
 
 handle_call(Request, _From, State) ->
