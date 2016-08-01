@@ -13,7 +13,7 @@
 
 -export([
 	start_link/1,
-	new_client/1,
+	new_client/2,
 	update_client/2,
 	message/2]).
 
@@ -25,8 +25,8 @@
 start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
-new_client(IPPort) ->
-	gen_server:call(?MODULE, {new_client, IPPort}, 1000).
+new_client(IPPort, Pid) ->
+	gen_server:call(?MODULE, {new_client, IPPort, Pid}, 1000).
 
 update_client(Id, {Param, Value}) ->
 	gen_server:call(?MODULE, {update_client, Id, {Param, Value}}, 1000).
@@ -38,9 +38,9 @@ init(_Args) ->
     Clients = ets:new(clients, [protected, set]),
     {ok, #state{clients = Clients}}.
 
-handle_call({new_client, IPPort}, _From, #state{clients = Clients, id = Id} = State) ->
+handle_call({new_client, IPPort, ConnectionPid}, _From, #state{clients = Clients, id = Id} = State) ->
 	NewId = Id + 1,
-    {ok, Pid} = supervisor:start_child(worker_sub, []),
+    {ok, Pid} = supervisor:start_child(worker_sub, [#{connection_pid=>ConnectionPid}]),
     ets:insert(Clients, {NewId, IPPort, undefined, Pid}),
     {reply, {ok, NewId}, State#state{id = NewId}};
 

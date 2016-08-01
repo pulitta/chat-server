@@ -50,6 +50,10 @@ handle_info({tcp_error, _, Reason}, State) ->
 handle_info(Info, State) ->
     {stop, {unknown_info, Info}, State}.
 
+handle_call({send, Data}, _From, State) ->
+    gen_tcp:send(State#state.socket, Data),
+    {reply, ok, State};
+
 handle_call(Request, _From, State) ->
     {stop, {unknown_call, Request}, State}.
 
@@ -65,7 +69,7 @@ code_change(_OldVsn, State, _Extra) ->
 % Internal
 handle_data(<<"new">>, #state{socket = Socket} = State) ->
     {ok, {Ip, Port}} = inet:peername(Socket),
-    case chat_server_broker:new_client({Ip, Port}) of
+    case chat_server_broker:new_client({Ip, Port}, self()) of
         {ok, Id} ->
             BinId = integer_to_binary(Id),
             gen_tcp:send(State#state.socket, <<"id ", BinId/binary>>),

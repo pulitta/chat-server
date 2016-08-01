@@ -31,6 +31,6 @@ init(main) ->
 init(sub) ->
     SupFlags = #{strategy => simple_one_for_one, intensity => 0, period => 1},
     ChildSpecs = [#{id => undefined,
-                    start => {chat_server_worker, start_link, [[]]},
+                    start => {chat_server_worker, start_link, []},
                     shutdown => brutal_kill}],
     {ok, {SupFlags, ChildSpecs}}.
