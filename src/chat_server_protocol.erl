@@ -73,7 +73,7 @@ handle_data(<<"new">>, #state{socket = Socket} = State) ->
         {error, Reason} -> {error, Reason, State}
     end;
 
-handle_data(<<"i","d"," ",Id/binary>>, #state{socket = Socket} = State) ->
+handle_data(<<"id"," ",Id/binary>>, #state{socket = Socket} = State) ->
     IntId = binary_to_integer(Id),
     {ok, {Ip, Port}} = inet:peername(Socket),
     case chat_server_broker:update_client(IntId, {ipport, {Ip, Port}}) of
@@ -81,7 +81,7 @@ handle_data(<<"i","d"," ",Id/binary>>, #state{socket = Socket} = State) ->
         {error, Reason} -> {error, Reason, State}
     end;
 
-handle_data(<<"s","e","t","n","i","c","k"," ",Nick/binary>>, #state{client_id = ClientId} = State) ->
+handle_data(<<"setnick"," ",Nick/binary>>, #state{client_id = ClientId} = State) ->
     case chat_server_broker:update_client(ClientId, {nickname, Nick}) of
         ok -> {ok, State};
         {error, Reason} -> {error, Reason, State}
