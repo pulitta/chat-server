@@ -22,17 +22,19 @@ start_link(Ref, Socket, Transport, Opts) ->
     proc_lib:start_link(?MODULE, init, [Ref, Socket, Transport, Opts]).
 
 -record(state, {
-            socket          :: gen_tcp:socket(), 
-            transport       :: ranch_tcp,
-            client_id       :: integer
+            socket                  :: gen_tcp:socket(), 
+            transport               :: ranch_tcp,
+            client_id               :: integer,
+            max_message_length      :: integer
         }).
 
-init(Ref, Socket, Transport, _Opts = []) ->
+init(Ref, Socket, Transport, Opts) ->
     ok = proc_lib:init_ack({ok, self()}),
     ok = ranch:accept_ack(Ref),
     ok = Transport:setopts(Socket, [{active, true}, binary]),
+    MaxLength = proplists:get_value(max_message_length, Opts),
     gen_server:enter_loop(?MODULE, [],
-        #state{socket=Socket, transport=Transport},
+        #state{socket=Socket, transport=Transport, max_message_length=MaxLength},
         ?TIMEOUT).
 
 handle_info({tcp, Socket, Data}, State = #state{socket = Socket}) ->
