@@ -30,7 +30,7 @@ start_link(Ref, Socket, Transport, Opts) ->
 init(Ref, Socket, Transport, _Opts = []) ->
     ok = proc_lib:init_ack({ok, self()}),
     ok = ranch:accept_ack(Ref),
-    ok = Transport:setopts(Socket, [{active, true}, {packet, 4}]),
+    ok = Transport:setopts(Socket, [{active, true}, binary]),
     gen_server:enter_loop(?MODULE, [],
         #state{socket=Socket, transport=Transport},
         ?TIMEOUT).
@@ -67,31 +67,34 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 % Internal
-handle_data(<<"new">>, #state{socket = Socket} = State) ->
+handle_data(<<"new\r\n">>, #state{socket = Socket} = State) ->
     {ok, {Ip, Port}} = inet:peername(Socket),
     case chat_server_broker:new_client({Ip, Port}, self()) of
         {ok, Id} ->
             BinId = integer_to_binary(Id),
-            gen_tcp:send(State#state.socket, <<"id ", BinId/binary>>),
+            gen_tcp:send(State#state.socket, <<"id ", BinId/binary, "\n">>),
             {ok, State#state{client_id = Id}};
         {error, Reason} -> {error, Reason, State}
     end;
 
-handle_data(<<"id"," ",Id/binary>>, #state{socket = Socket} = State) ->
-    IntId = binary_to_integer(Id),
+handle_data(<<"id"," ",Id/integer, "\r\n">>, #state{socket = Socket} = State) ->
     {ok, {Ip, Port}} = inet:peername(Socket),
-    case chat_server_broker:update_client(IntId, {ipport, {Ip, Port}}) of
-        ok -> {ok, State#state{client_id = IntId}};
+    case chat_server_broker:update_client(Id, {ipport, {Ip, Port}}) of
+        ok -> {ok, State#state{client_id = Id}};
         {error, Reason} -> {error, Reason, State}
     end;
 
 handle_data(<<"setnick"," ",Nick/binary>>, #state{client_id = ClientId} = State) ->
-    case chat_server_broker:update_client(ClientId, {nickname, Nick}) of
+    Nick1 = binary:replace(Nick, <<"\r">>, <<"">>),
+    Nick2 = binary:replace(Nick1, <<"\n">>, <<"">>),
+    case chat_server_broker:update_client(ClientId, {nickname, Nick2}) of
         ok -> {ok, State};
         {error, Reason} -> {error, Reason, State}
     end;
 
 handle_data(Message, #state{client_id = ClientId} = State) ->
-    chat_server_broker:message(ClientId, Message),
+    Message1 = binary:replace(Message, <<"\r">>, <<"">>),
+    Message2 = binary:replace(Message1, <<"\n">>, <<"">>),
+    chat_server_broker:message(ClientId, Message2),
     {ok, State}.
     

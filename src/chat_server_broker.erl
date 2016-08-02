@@ -41,29 +41,24 @@ init(_Args) ->
 handle_call({new_client, IPPort, ConnectionPid}, _From, #state{clients = Clients, id = Id} = State) ->
 	NewId = Id + 1,
     {ok, Pid} = supervisor:start_child(worker_sub, [#{connection_pid=>ConnectionPid}]),
-    ets:insert(Clients, {NewId, IPPort, undefined, Pid}),
+    ok = gen_server:call(Pid, {ipport, IPPort}, 1000), 
+    ets:insert(Clients, {NewId, Pid}),
     {reply, {ok, NewId}, State#state{id = NewId}};
 
 handle_call({update_client, Id, ParamToUpdate}, _From, #state{clients = Clients} = State) ->
-	case ets:lookup(Clients, Id) of
-		[{_, IpPort, Nickname, Pid}] -> 
-			ets:delete(Clients, Id),
-			case ParamToUpdate of
-				{ipport, NewIpPort} -> 
-					ets:insert(Clients, {Id, NewIpPort, Nickname, Pid});
-				{nickname, NewNickname} ->
-					ets:insert(Clients, {Id, IpPort, NewNickname, Pid});
-				_ -> undefined
-			end;
+	case ets:select(Clients,[{{'$1','$2'},[{'/=', '$1', Id}],['$2']}]) of
+		[Pid] ->
+			ok = gen_server:call(Pid, ParamToUpdate, 1000);
 		_ -> undefined
-    end,
+	end,
     {reply, ok, State};
 
 handle_call({message, Id, Message}, _From, #state{clients = Clients} = State) ->
-	Pids =  ets:select(Clients,[{{'$1','_','_','$4'},[{'/=', '$1', Id}],['$4']}]),
+	Pids = ets:select(Clients,[{{'$1','$2'},[{'/=', '$1', Id}],['$2']}]),
+	Datetime = calendar:local_time(),
 	ok = lists:foreach(
 		fun(Pid) -> 
-			gen_server:call(Pid, {message, Message}, 1000)
+			ok = gen_server:call(Pid, {message, {Datetime, Message}}, 1000)
 		end,
 	Pids),
     {reply, ok, State};
