@@ -46,7 +46,7 @@ handle_call({new_client, IPPort, ConnectionPid}, _From, #state{clients = Clients
     {reply, {ok, NewId}, State#state{id = NewId}};
 
 handle_call({update_client, Id, ParamToUpdate}, _From, #state{clients = Clients} = State) ->
-	case ets:select(Clients,[{{'$1','$2'},[{'/=', '$1', Id}],['$2']}]) of
+	case ets:select(Clients,[{{'$1','$2'},[{'==', '$1', Id}],['$2']}]) of
 		[Pid] ->
 			ok = gen_server:call(Pid, ParamToUpdate, 1000);
 		_ -> undefined

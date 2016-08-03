@@ -43,6 +43,9 @@ handle_call({ipport, {Ip, Port}}, _From, State) ->
 handle_call({nickname, Nickname}, _From, State) ->
     {reply, ok, State#state{nickname = Nickname}};
 
+handle_call({connection_pid, ConnectionPid}, _From, State) ->
+    {reply, ok, State#state{connection_pid = ConnectionPid}};
+
 handle_call({message, {Datetime, Message}}, _From, #state{messages = Messages} = State) ->
 	NewMessages = queue:in({Datetime, Message}, Messages),
     {reply, ok, State#state{messages = NewMessages}};
@@ -52,6 +55,12 @@ handle_call(Request, _From, State) ->
 
 handle_cast(_Msg, State) ->
     {noreply, State}.
+
+handle_info(check_queue, #state{timer = TimerRef,
+								connection_pid = undefined} = State) ->
+	erlang:cancel_timer(TimerRef),
+	NewTimerRef = erlang:send_after(?CHECK_TIMER, self(), check_queue),
+    {noreply, State};
 
 handle_info(check_queue, #state{timer = TimerRef, 
 								messages = Messages, 

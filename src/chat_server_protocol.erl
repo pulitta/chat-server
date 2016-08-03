@@ -62,7 +62,8 @@ handle_call(Request, _From, State) ->
 handle_cast(Msg, State) ->
     {stop, {unknown_cast, Msg}, State}.
 
-terminate(_Reason, _State) ->
+terminate(_Reason, #state{client_id = ClientId}) ->
+    ok = chat_server_broker:update_client(ClientId, {connection_pid, undefined}),
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -80,11 +81,11 @@ handle_data(<<"new\r\n">>, #state{socket = Socket} = State) ->
     end;
 
 handle_data(<<"id"," ",Id/integer, "\r\n">>, #state{socket = Socket} = State) ->
+    IntId = binary_to_integer(<<Id>>),
     {ok, {Ip, Port}} = inet:peername(Socket),
-    case chat_server_broker:update_client(Id, {ipport, {Ip, Port}}) of
-        ok -> {ok, State#state{client_id = Id}};
-        {error, Reason} -> {error, Reason, State}
-    end;
+    ok = chat_server_broker:update_client(IntId, {ipport, {Ip, Port}}),
+    ok = chat_server_broker:update_client(IntId, {connection_pid, self()}),
+    {ok, State#state{client_id = IntId}};
 
 handle_data(<<"setnick"," ",Nick/binary>>, #state{client_id = ClientId} = State) ->
     Nick1 = binary:replace(Nick, <<"\r">>, <<"">>),
