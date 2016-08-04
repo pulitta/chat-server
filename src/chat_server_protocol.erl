@@ -87,17 +87,25 @@ handle_data(<<"id"," ",Id/integer, "\r\n">>, #state{socket = Socket} = State) ->
     ok = chat_server_broker:update_client(IntId, {connection_pid, self()}),
     {ok, State#state{client_id = IntId}};
 
-handle_data(<<"setnick"," ",Nick/binary>>, #state{client_id = ClientId} = State) ->
+handle_data(<<"setnick <", Nick/binary>>, #state{client_id = ClientId} = State) ->
     Nick1 = binary:replace(Nick, <<"\r">>, <<"">>),
     Nick2 = binary:replace(Nick1, <<"\n">>, <<"">>),
-    case chat_server_broker:update_client(ClientId, {nickname, Nick2}) of
+    Nick3 = binary:replace(Nick2, <<">">>, <<"">>),
+    case chat_server_broker:update_client(ClientId, {nickname, Nick3}) of
         ok -> {ok, State};
         {error, Reason} -> {error, Reason, State}
     end;
 
-handle_data(Message, #state{client_id = ClientId} = State) ->
+handle_data(Message, #state{client_id = ClientId, max_message_length = MaxLength} = State) ->
     Message1 = binary:replace(Message, <<"\r">>, <<"">>),
     Message2 = binary:replace(Message1, <<"\n">>, <<"">>),
-    chat_server_broker:message(ClientId, Message2),
+    MessageList = binary_to_list(Message2),
+    NewMessage = if 
+        MaxLength < length(MessageList) ->
+            io_lib:format("~s [cut. message too long]", [string:substr(MessageList, 1, MaxLength)]);
+        true ->
+            MessageList
+    end,
+    chat_server_broker:message(ClientId, NewMessage),
     {ok, State}.
     

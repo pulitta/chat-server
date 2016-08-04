@@ -23,10 +23,7 @@
 -record(state, {
 			connection_pid,
 			timer,
-            messages,
-            ip,
-            port,
-            nickname
+            messages
         }).
 
 start_link(Args) ->
@@ -37,17 +34,11 @@ init(#{connection_pid:=ConnectionPid}) ->
 	TimerRef = erlang:send_after(1000, self(), check_queue),
     {ok, #state{messages = Messages, timer = TimerRef, connection_pid = ConnectionPid}}.
 
-handle_call({ipport, {Ip, Port}}, _From, State) ->
-    {reply, ok, State#state{ip = Ip, port = Port}};
-
-handle_call({nickname, Nickname}, _From, State) ->
-    {reply, ok, State#state{nickname = Nickname}};
-
 handle_call({connection_pid, ConnectionPid}, _From, State) ->
     {reply, ok, State#state{connection_pid = ConnectionPid}};
 
-handle_call({message, {Datetime, Message}}, _From, #state{messages = Messages} = State) ->
-	NewMessages = queue:in({Datetime, Message}, Messages),
+handle_call({message, {Id, Datetime, Message}}, _From, #state{messages = Messages} = State) ->
+	NewMessages = queue:in({Id, Datetime, Message}, Messages),
     {reply, ok, State#state{messages = NewMessages}};
 
 handle_call(Request, _From, State) ->
@@ -64,20 +55,12 @@ handle_info(check_queue, #state{timer = TimerRef,
 
 handle_info(check_queue, #state{timer = TimerRef, 
 								messages = Messages, 
-								connection_pid = ConnectionPid, 
-								ip = Ip, 
-								port = Port,
-								nickname = Nickname} = State) ->
+								connection_pid = ConnectionPid} = State) ->
     erlang:cancel_timer(TimerRef),
     OtherMessages = case queue:out(Messages) of
     	{empty,_} -> Messages;
-    	{{value,{{_, {H,M,S}}, Message}},Other} ->
-    		IpOrNick = case Nickname of
-    			undefined -> 
-    				{A,B,C,D} = Ip,
-    				io_lib:format("~p.~p.~p.~p:~p", [A,B,C,D, Port]);
-    			_ -> Nickname
-    		end,
+    	{{value,{Id, {_, {H,M,S}}, Message}},Other} ->
+    		IpOrNick = chat_server_broker:get_nickname(Id),
     		ok = gen_server:call(ConnectionPid, {send, io_lib:format("[~s:~s](~s): <~s> ~n", [?FIRST_NULL(H), ?FIRST_NULL(M), IpOrNick, Message])}, 3000),
     		Other
    	end,
