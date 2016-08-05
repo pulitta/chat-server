@@ -23,22 +23,30 @@
 -record(state, {
 			connection_pid,
 			timer,
-            messages
+            messages,
+            queue_len
         }).
 
 start_link(Args) ->
     gen_server:start_link(?MODULE, Args, []).
 
-init(#{connection_pid:=ConnectionPid}) ->
+init(#{connection_pid:=ConnectionPid, queue_len:= QueueLen}) ->
 	Messages = queue:new(),
 	TimerRef = erlang:send_after(1000, self(), check_queue),
-    {ok, #state{messages = Messages, timer = TimerRef, connection_pid = ConnectionPid}}.
+    {ok, #state{messages = Messages, 
+    			timer = TimerRef, 
+    			connection_pid = ConnectionPid,
+    			queue_len = QueueLen}}.
 
 handle_call({connection_pid, ConnectionPid}, _From, State) ->
     {reply, ok, State#state{connection_pid = ConnectionPid}};
 
-handle_call({message, {Id, Datetime, Message}}, _From, #state{messages = Messages} = State) ->
-	NewMessages = queue:in({Id, Datetime, Message}, Messages),
+handle_call({message, {Id, Datetime, Message}}, _From, #state{messages = Messages, queue_len = QueueLen} = State) ->
+	CurrentQueueLen = queue:len(Messages),
+	NewMessages = if
+		CurrentQueueLen >= QueueLen -> Messages;
+		true -> queue:in({Id, Datetime, Message}, Messages)
+	end,
     {reply, ok, State#state{messages = NewMessages}};
 
 handle_call(Request, _From, State) ->

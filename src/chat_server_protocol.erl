@@ -25,7 +25,9 @@ start_link(Ref, Socket, Transport, Opts) ->
             socket                  :: gen_tcp:socket(), 
             transport               :: ranch_tcp,
             client_id               :: integer,
-            max_message_length      :: integer
+            max_message_length      :: integer,
+            bad_words               :: list,
+            history_message_count   :: integer
         }).
 
 init(Ref, Socket, Transport, Opts) ->
@@ -33,8 +35,14 @@ init(Ref, Socket, Transport, Opts) ->
     ok = ranch:accept_ack(Ref),
     ok = Transport:setopts(Socket, [{active, true}, binary]),
     MaxLength = proplists:get_value(max_message_length, Opts),
+    BadWords = proplists:get_value(bad_words, Opts),
+    HistoryMessageCount = proplists:get_value(history_message_count, Opts),
     gen_server:enter_loop(?MODULE, [],
-        #state{socket=Socket, transport=Transport, max_message_length=MaxLength},
+        #state{socket=Socket, 
+               transport=Transport, 
+               max_message_length=MaxLength,
+               bad_words = BadWords,
+               history_message_count = HistoryMessageCount},
         ?TIMEOUT).
 
 handle_info({tcp, Socket, Data}, State = #state{socket = Socket}) ->
@@ -70,9 +78,9 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 % Internal
-handle_data(<<"new\r\n">>, #state{socket = Socket} = State) ->
+handle_data(<<"new\r\n">>, #state{socket = Socket, history_message_count = HistoryMessageCount} = State) ->
     {ok, {Ip, Port}} = inet:peername(Socket),
-    case chat_server_broker:new_client({Ip, Port}, self()) of
+    case chat_server_broker:new_client({Ip, Port}, self(), HistoryMessageCount) of
         {ok, Id} ->
             BinId = integer_to_binary(Id),
             gen_tcp:send(State#state.socket, <<"id ", BinId/binary, "\n">>),
@@ -96,16 +104,32 @@ handle_data(<<"setnick <", Nick/binary>>, #state{client_id = ClientId} = State) 
         {error, Reason} -> {error, Reason, State}
     end;
 
-handle_data(Message, #state{client_id = ClientId, max_message_length = MaxLength} = State) ->
+handle_data(Message, #state{client_id = ClientId, max_message_length = MaxLength, bad_words = BadWords} = State) ->
     Message1 = binary:replace(Message, <<"\r">>, <<"">>),
     Message2 = binary:replace(Message1, <<"\n">>, <<"">>),
     MessageList = binary_to_list(Message2),
-    NewMessage = if 
-        MaxLength < length(MessageList) ->
-            io_lib:format("~s [cut. message too long]", [string:substr(MessageList, 1, MaxLength)]);
+    case kick_client(Message2, BadWords) of
         true ->
-            MessageList
-    end,
-    chat_server_broker:message(ClientId, NewMessage),
-    {ok, State}.
+            {error, bad_word_found, State};
+        _ ->  
+            NewMessage = if 
+                MaxLength < length(MessageList) ->
+                    io_lib:format("~s [cut. message too long]", [string:substr(MessageList, 1, MaxLength)]);
+                true ->
+                    MessageList
+            end,
+            chat_server_broker:message(ClientId, NewMessage),
+            {ok, State}
+    end.
     
+kick_client(_, []) -> false;
+kick_client(Message, [BadWord|Other]) ->
+    case re:run(Message,BadWord,[]) of
+        {match, _} -> 
+            Value = rand:uniform(),
+            if 
+                Value =< 0.1 -> true;
+                true -> false
+            end;
+        nomatch -> kick_client(Message, Other)
+    end.

@@ -19,6 +19,6 @@ stop(_) ->
     ok.
 
 start_listener() ->
-	{ok, MaxLength} = application:get_env(chat_server, max_message_length),
+	Settings = application:get_all_env(chat_server),
     {ok, _} = ranch:start_listener(default_listener, 10,
-        ranch_tcp, [{port, 1234}], chat_server_protocol, [{max_message_length, MaxLength}]).
+        ranch_tcp, [{port, 1234}], chat_server_protocol, Settings).
